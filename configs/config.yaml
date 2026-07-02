@@ -1,0 +1,114 @@
+# ==========================================================================
+# Konfigurasi Penelitian: Prediksi SST Laut Banda
+# Model Hibrida LSTM-Transformer
+# Pendekatan: UNIVARIAT (hanya thetao/SST sebagai input, F = 1)
+# Single source of truth untuk seluruh pipeline.
+# ==========================================================================
+
+project:
+  name: thesis-sst
+  approach: univariate
+  random_seed: 42
+
+# --------------------------------------------------------------------------
+# Domain Spasial (Laut Banda)
+# --------------------------------------------------------------------------
+domain:
+  lat_min: -9.0          # domain analisis
+  lat_max: -3.0
+  lon_min: 123.0
+  lon_max: 133.0
+  buffer_lat_min: -9.5   # buffer download (lebih luas dari domain analisis)
+  buffer_lat_max: -2.5
+  buffer_lon_min: 122.5
+  buffer_lon_max: 133.5
+  depth_min: 0.49        # lapisan permukaan (~0.5 m)
+  depth_max: 0.51
+
+# --------------------------------------------------------------------------
+# Sumber Data CMEMS
+# --------------------------------------------------------------------------
+data:
+  variables: [thetao]                                       # UNIVARIAT: hanya SST
+  reanalysis_dataset_id: cmems_mod_glo_phy_my_0.083deg_P1D-m
+  analysis_dataset_id:   cmems_mod_glo_phy_anfc_0.083deg_P1D-m
+  raw_dir: data/raw
+  processed_dir: data/processed
+  start_date: "2014-01-01"
+  end_date: "2026-12-31"
+  reanalysis_end: "2023-12-31"     # batas reanalysis; setelahnya pakai ANFC
+
+# --------------------------------------------------------------------------
+# Pembagian Data Temporal (kronologis, TANPA pengacakan)
+# --------------------------------------------------------------------------
+split:
+  train: ["2014-01-01", "2022-12-31"]   # ~9 tahun
+  val:   ["2023-01-01", "2023-12-31"]   # 1 tahun
+  test:  ["2024-01-01", "2026-12-31"]   # 2+ tahun
+
+# --------------------------------------------------------------------------
+# Quality Control SST
+# --------------------------------------------------------------------------
+qc:
+  sst_min: 20.0          # °C - batas fisik wajar Laut Banda
+  sst_max: 35.0
+  interpolate_gaps: true # interpolasi temporal untuk celah kecil
+
+# --------------------------------------------------------------------------
+# Desain Eksperimen
+#   REKONSILIASI horizon vs lookback:
+#     - lookback_windows = panjang riwayat masukan (N)  -> 7 / 14 / 21 / 30 hari
+#     - horizons         = horizon prediksi (h, t+h)    -> 1 / 3 / 7 / 14 hari
+#   4 lookback x 4 horizon x 4 model = 64 eksperimen
+# --------------------------------------------------------------------------
+experiment:
+  lookback_windows: [7, 14, 21, 30]
+  horizons: [1, 3, 7, 14]
+  # Hanya 3 model deep learning yang DIBANDINGKAN: 4 x 4 x 3 = 48 eksperimen.
+  # Persistence TIDAK ada di sini (bukan model pembanding), tetapi tetap
+  # dihitung otomatis di latar sebagai ACUAN Skill Score (penyebut SS).
+  models: [lstm, transformer, hybrid]
+
+# --------------------------------------------------------------------------
+# Hyperparameter Model
+# --------------------------------------------------------------------------
+model:
+  lstm:
+    hidden_size: 50
+    num_layers: 1
+    dropout: 0.1
+  transformer:
+    d_model: 64
+    nhead: 4
+    num_layers: 2
+    dim_feedforward: 128
+    dropout: 0.1
+  hybrid:
+    lstm_hidden: 50
+    proj_dim: 52           # 50 tidak habis dibagi 4 -> proyeksi linear 50->52
+    nhead: 4               # 52 % 4 == 0
+    num_transformer_layers: 2
+    dim_feedforward: 128
+    dropout: 0.1
+
+# --------------------------------------------------------------------------
+# Pelatihan
+# --------------------------------------------------------------------------
+training:
+  device: mps            # Apple Silicon: mps | cpu | cuda
+  batch_size: 64
+  max_epochs: 100
+  learning_rate: 0.001
+  early_stopping_patience: 10
+  num_workers: 4
+  pin_memory: false      # WAJIB false untuk backend MPS
+
+# --------------------------------------------------------------------------
+# Evaluasi
+# --------------------------------------------------------------------------
+evaluation:
+  primary_metric: skill_score
+  skill_score_threshold: 0.3      # gate utama vs Persistence (Xu et al., 2023)
+  metrics: [rmse, mae, r2, nse, skill_score]
+  results_dir: results
+  figures_dir: results/figures

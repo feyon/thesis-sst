@@ -1,0 +1,97 @@
+# ===========================================================================
+# Singularity Definition File — thesis-sst
+# Prediksi SST Laut Banda: Hibrida LSTM-Transformer
+# Base: Ubuntu 22.04 + CUDA 12.1 + Python 3.11 + PyTorch 2.2
+# ===========================================================================
+Bootstrap: docker
+From: nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+%labels
+    Author      Ferry Yonathan
+    Project     thesis-sst
+    Description Prediksi SST Laut Banda - LSTM Transformer Hybrid
+    Version     1.0
+
+%environment
+    # Aktifkan conda environment setiap container dijalankan
+    export PATH="/opt/miniconda3/bin:$PATH"
+    export CONDA_DEFAULT_ENV=thesis-sst
+    export PATH="/opt/miniconda3/envs/thesis-sst/bin:$PATH"
+
+    # CUDA
+    export CUDA_HOME=/usr/local/cuda
+    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+    # Python tidak buffer output (langsung tampil di log)
+    export PYTHONUNBUFFERED=1
+    export PYTHONDONTWRITEBYTECODE=1
+
+%post
+    # -----------------------------------------------------------------------
+    # 1. Update sistem & install dependensi dasar
+    # -----------------------------------------------------------------------
+    apt-get update -y && apt-get install -y \
+        wget curl git vim \
+        libgomp1 \
+        libglib2.0-0 \
+        && apt-get clean \
+        && rm -rf /var/lib/apt/lists/*
+
+    # -----------------------------------------------------------------------
+    # 2. Install Miniconda3
+    # -----------------------------------------------------------------------
+    wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+        -O /tmp/miniconda.sh
+    bash /tmp/miniconda.sh -b -p /opt/miniconda3
+    rm /tmp/miniconda.sh
+    export PATH="/opt/miniconda3/bin:$PATH"
+
+    # -----------------------------------------------------------------------
+    # 3. Buat conda environment Python 3.11
+    # -----------------------------------------------------------------------
+    conda create -n thesis-sst python=3.11 -y
+    export PATH="/opt/miniconda3/envs/thesis-sst/bin:$PATH"
+
+    # -----------------------------------------------------------------------
+    # 4. Install PyTorch 2.2 dengan CUDA 12.1
+    # -----------------------------------------------------------------------
+    pip install --no-cache-dir \
+        torch==2.2.0 \
+        --index-url https://download.pytorch.org/whl/cu121
+
+    # -----------------------------------------------------------------------
+    # 5. Install semua library proyek
+    # -----------------------------------------------------------------------
+    pip install --no-cache-dir \
+        copernicusmarine>=2.0.0 \
+        xarray>=2024.1.0 \
+        netCDF4>=1.6.5 \
+        dask>=2024.1.0 \
+        numpy>=1.26.0 \
+        pandas>=2.1.0 \
+        scikit-learn>=1.4.0 \
+        scipy>=1.12.0 \
+        matplotlib>=3.8.0 \
+        seaborn>=0.13.0 \
+        pyyaml>=6.0 \
+        tqdm>=4.66.0
+
+    # -----------------------------------------------------------------------
+    # 6. Bersihkan cache untuk mengecilkan ukuran image
+    # -----------------------------------------------------------------------
+    conda clean -afy
+    pip cache purge
+
+%runscript
+    # Dijalankan saat: singularity run thesis-sst.sif
+    exec python "$@"
+
+%test
+    # Verifikasi otomatis saat build selesai
+    echo "=== Verifikasi Environment ==="
+    python --version
+    python -c "import torch; print('PyTorch:', torch.__version__)"
+    python -c "import torch; print('CUDA tersedia:', torch.cuda.is_available())"
+    python -c "import xarray; print('xarray:', xarray.__version__)"
+    python -c "import copernicusmarine; print('copernicusmarine: OK')"
+    echo "=== Verifikasi Selesai ==="

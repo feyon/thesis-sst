@@ -1,0 +1,163 @@
+# =============================================================================
+# docker-compose.yml — thesis-sst
+# Mac Mini M2 Pro — CPU mode (preprocessing, EDA, uji logika)
+#
+# Perintah utama:
+#   docker compose up preprocess    — pipeline preprocessing CMEMS + Argo
+#   docker compose up jupyter       — JupyterLab di localhost:8888
+#   docker compose up evaluate      — hitung metrik evaluasi model
+#   docker compose run --rm shell   — shell interaktif
+#   docker compose logs -f          — ikuti log real-time
+# =============================================================================
+
+services:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # preprocess — download CMEMS, QC, collocation Argo, z-score, sliding window
+  # ──────────────────────────────────────────────────────────────────────────
+  preprocess:
+    build:
+      context: .
+      args:
+        TARGET: cpu
+        BUILD_DATE: "${BUILD_DATE:-unknown}"
+    image: thesis-sst:cpu
+    container_name: sst-preprocess
+    volumes:
+      - ./data:/workspace/data
+      - ./logs:/workspace/logs
+      - ./src:/workspace/src          # live-reload: perubahan kode langsung berlaku
+      - ./configs:/workspace/configs
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/workspace
+    command: >
+      python src/data/preprocess.py
+      --config configs/data_config.yaml
+      --output data/processed
+      --log-level INFO
+    restart: "no"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # jupyter — EDA, eksplorasi data, visualisasi spasial, analisis korelasi
+  # Akses di: http://localhost:8888
+  # ──────────────────────────────────────────────────────────────────────────
+  jupyter:
+    build:
+      context: .
+      args:
+        TARGET: cpu
+    image: thesis-sst:cpu
+    container_name: sst-jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data:/workspace/data
+      - ./notebooks:/workspace/notebooks
+      - ./src:/workspace/src
+      - ./configs:/workspace/configs
+      - ./reports:/workspace/reports
+      - ./models:/workspace/models
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/workspace
+    command: >
+      jupyter lab
+      --ip=0.0.0.0
+      --port=8888
+      --no-browser
+      --allow-root
+      --NotebookApp.token=''
+      --NotebookApp.password=''
+      --notebook-dir=/workspace
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # train-test — uji logika training pipeline (CPU, 3 epoch saja)
+  # ⚠️  BUKAN untuk training penuh — gunakan native Python + MPS untuk itu
+  # ──────────────────────────────────────────────────────────────────────────
+  train-test:
+    build:
+      context: .
+      args:
+        TARGET: cpu
+    image: thesis-sst:cpu
+    container_name: sst-train-test
+    volumes:
+      - ./data:/workspace/data
+      - ./models:/workspace/models
+      - ./logs:/workspace/logs
+      - ./src:/workspace/src
+      - ./configs:/workspace/configs
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/workspace
+    command: >
+      python src/models/train.py
+      --model hybrid
+      --lookback 7
+      --horizon 1
+      --epochs 3
+      --batch-size 32
+      --device cpu
+      --config configs/model_config.yaml
+      --output models/checkpoints/test_run
+    restart: "no"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # evaluate — hitung semua metrik: RMSE, MAE, MAPE, R², NSE, Skill Score
+  # ──────────────────────────────────────────────────────────────────────────
+  evaluate:
+    build:
+      context: .
+      args:
+        TARGET: cpu
+    image: thesis-sst:cpu
+    container_name: sst-evaluate
+    volumes:
+      - ./data:/workspace/data
+      - ./models:/workspace/models
+      - ./reports:/workspace/reports
+      - ./logs:/workspace/logs
+      - ./src:/workspace/src
+      - ./configs:/workspace/configs
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/workspace
+    command: >
+      python src/evaluation/evaluate.py
+      --config configs/model_config.yaml
+      --checkpoint-dir models/checkpoints
+      --output-dir reports
+    restart: "no"
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # shell — shell interaktif untuk debugging & eksperimen manual
+  # Cara pakai: docker compose run --rm shell
+  # ──────────────────────────────────────────────────────────────────────────
+  shell:
+    build:
+      context: .
+      args:
+        TARGET: cpu
+    image: thesis-sst:cpu
+    container_name: sst-shell
+    volumes:
+      - ./data:/workspace/data
+      - ./models:/workspace/models
+      - ./reports:/workspace/reports
+      - ./notebooks:/workspace/notebooks
+      - ./src:/workspace/src
+      - ./configs:/workspace/configs
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/workspace
+    stdin_open: true
+    tty: true
+    command: bash
+    restart: "no"

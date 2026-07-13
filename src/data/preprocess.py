@@ -29,7 +29,7 @@ def build_series(cfg: dict) -> pd.DataFrame:
 
     d, data, qc = cfg["domain"], cfg["data"], cfg["qc"]
     raw = Path(data["raw_dir"])
-    files = sorted(raw.glob("*.nc"))
+    files = sorted(raw.rglob("*.nc"))
     if not files:
         raise FileNotFoundError(
             f"Tidak ada file .nc di {raw}. Jalankan download.py lebih dulu."

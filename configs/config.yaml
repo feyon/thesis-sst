@@ -31,12 +31,12 @@ domain:
 data:
   variables: [thetao]                                       # UNIVARIAT: hanya SST
   reanalysis_dataset_id: cmems_mod_glo_phy_my_0.083deg_P1D-m
-  analysis_dataset_id:   cmems_mod_glo_phy_anfc_0.083deg_P1D-m
+  analysis_dataset_id:   cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m
   raw_dir: data/raw
   processed_dir: data/processed
   start_date: "2014-01-01"
   end_date: "2026-12-31"
-  reanalysis_end: "2023-12-31"     # batas reanalysis; setelahnya pakai ANFC
+  reanalysis_end: "2022-12-31"     # batas reanalysis; setelahnya pakai ANFC
 
 # --------------------------------------------------------------------------
 # Pembagian Data Temporal (kronologis, TANPA pengacakan)

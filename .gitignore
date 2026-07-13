@@ -1,0 +1,5 @@
+data/raw/
+data/processed/
+*.nc
+.ipynb_checkpoints/
+.Trash-0/

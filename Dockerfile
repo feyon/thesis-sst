@@ -1,18 +1,18 @@
 # =============================================================================
 # Dockerfile — thesis-sst
 # Build targets:
-#   cpu  (default) → Mac Mini M2 Pro: preprocessing, EDA, testing
-#   cuda           → HPC BMKG: Ubuntu 22.04 + CUDA 12.1
+#   cpu  (default) -> Mac Mini M2 Pro: preprocessing, EDA, testing
+#   cuda           -> HPC BMKG: Ubuntu 22.04 + CUDA 12.1
 #
-# ⚠️  MPS backend TIDAK tersedia di dalam Docker container.
-#     Gunakan native .venv untuk training dengan MPS di Mac Mini.
+# MPS backend TIDAK tersedia di dalam Docker container.
+# Gunakan native .venv untuk training dengan MPS di Mac Mini.
 # =============================================================================
 
 ARG TARGET=cpu
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # STAGE 1 — cpu
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 FROM python:3.11-slim AS stage-cpu
 
 ENV TORCH_DEVICE=cpu \
@@ -32,9 +32,9 @@ RUN pip install --upgrade pip \
     && pip install torch==2.3.0 torchvision torchaudio \
         --index-url https://download.pytorch.org/whl/cpu
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # STAGE 2 — cuda (HPC BMKG)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04 AS stage-cuda
 
 ENV TORCH_DEVICE=cuda \
@@ -63,9 +63,9 @@ RUN pip install --upgrade pip \
     && pip install torch==2.3.0 torchvision torchaudio \
         --index-url https://download.pytorch.org/whl/cu121
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # FINAL STAGE
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 FROM stage-${TARGET} AS final
 
 ARG TARGET=cpu
@@ -95,7 +95,7 @@ COPY src/     src/
 COPY configs/ configs/
 
 LABEL maintainer="Ferry Yonathan <241012000099@unpam.ac.id>" \
-      description="Hybrid LSTM-Transformer SST Prediction — Laut Banda" \
+      description="Hybrid LSTM-Transformer SST Prediction Laut Banda" \
       build.target="${TARGET}"
 
 COPY docker/entrypoint.sh /entrypoint.sh

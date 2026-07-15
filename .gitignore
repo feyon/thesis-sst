@@ -1,0 +1,40 @@
+# Data besar
+data/raw/
+data/processed/
+*.nc
+*.h5
+*.zarr
+
+# Model weights
+models/checkpoints/
+models/results/
+*.pt
+*.pth
+
+# Container
+*.sif
+*.tar.gz
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Env
+.env
+
+# Apptainer cache
+.apptainer/
+
+# Results & outputs
+results/
+*.json
+checkpoint-reader.py
+
+# macOS metadata
+.DS_Store
+**/.DS_Store

@@ -1,0 +1,31 @@
+# =============================================================================
+# requirements.txt — thesis-sst
+# Dependencies utama project (diinstall di Docker & native .venv)
+# PyTorch TIDAK dicantumkan di sini — diinstall terpisah per target
+# (CPU wheel untuk Docker, MPS/native untuk Mac M2 Pro)
+# =============================================================================
+
+# ── Core scientific stack ─────────────────────────────────────────────────
+numpy>=1.24,<2.0
+pandas>=2.0
+scipy>=1.11
+scikit-learn>=1.3
+
+# ── Oceanographic & geospatial data ──────────────────────────────────────
+xarray>=2023.1
+netCDF4>=1.6.5
+h5py>=3.9
+copernicusmarine>=2.0.0
+cfgrib>=0.9.10               # baca format GRIB jika diperlukan
+
+# ── Visualisasi ───────────────────────────────────────────────────────────
+matplotlib>=3.7
+seaborn>=0.12
+cartopy>=0.22                # peta oseanografi spasial
+cmocean>=3.0                 # colormap khusus oseanografi (SST, salinitas)
+
+# ── Utilities ─────────────────────────────────────────────────────────────
+tqdm>=4.65
+pyyaml>=6.0
+python-dotenv>=1.0
+loguru>=0.7                  # logging yang lebih informatif dari stdlib

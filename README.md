@@ -61,13 +61,52 @@ Catatan: variabel radiasi ERA5 (`ssr`,`str`) dikeluarkan dari desain
 `doy_sin`/`doy_cos`. Variabel `sst` versi ERA5 hanya dipakai sebagai
 pembanding QC independen, tidak masuk sebagai fitur model.
 
-### 2.4 Fitur Input Model (F = 9)
+### 2.4 Variabel yang Digunakan
+
+#### 2.4.1 Variabel Input — X (fitur prediktor, F = 9)
+
+Setiap sampel input berbentuk tensor **(T, F)** = (panjang lookback, 9
+fitur), dinormalisasi z-score (fit dari periode train saja).
+
+| # | Variabel | Sumber | Satuan | Kegunaan |
+|---|---|---|---|---|
+| 1 | `sst` | GLORYS/ANFC (`thetao`, lapisan permukaan ~0.5 m) | °C | Histori target itu sendiri (autoregresif) — sinyal terkuat krn SST sangat autokorelatif |
+| 2 | `u10` | ERA5 | m/s | Komponen zonal angin 10 m — arah/kekuatan monsun, pemicu upwelling |
+| 3 | `v10` | ERA5 | m/s | Komponen meridional angin 10 m |
+| 4 | `t2m` | ERA5 | °C (dari K) | Suhu udara 2 m — proxy fluks panas sensibel |
+| 5 | `d2m` | ERA5 | °C (dari K) | Titik embun 2 m — proxy kelembapan & fluks panas laten (evaporative cooling) |
+| 6 | `sp` | ERA5 | Pa | Tekanan permukaan — penanda sistem sinoptik/monsun |
+| 7 | `wind_speed` | Turunan: √(u10² + v10²) | m/s | Magnitudo angin — pengaduk mixed layer, pengendali evaporasi |
+| 8 | `doy_sin` | Turunan: sin(2π·doy/365.25) | — | Encoding musiman siklik (pengganti implisit sinyal radiasi yg di-drop) |
+| 9 | `doy_cos` | Turunan: cos(2π·doy/365.25) | — | Pasangan doy_sin — posisi kalender kontinu tanpa lompatan 31 Des→1 Jan |
+
+#### 2.4.2 Variabel Target — y
+
+- **y = `sst`** (GLORYS/ANFC) pada **h hari ke depan** setelah akhir
+  window input. Bentuk **(H,)** per sampel — prediksi *direct
+  multi-step* (semua langkah horizon sekaligus, bukan rekursif).
+- **Tidak dinormalisasi** — tetap skala °C asli, sehingga RMSE/MAE
+  langsung terbaca dalam satuan suhu.
+
+#### 2.4.3 Variabel Metadata (bukan input model, untuk analisis)
+
+| Variabel | Lokasi | Kegunaan |
+|---|---|---|
+| `mooring_id` (0–5) | `meta_*.csv` | Identitas titik — pemecahan evaluasi per lokasi; belum dipakai sbg fitur/embedding model |
+| `target_start_date` | `meta_*.csv` | Tanggal awal periode target tiap window — analisis temporal & plotting |
+| `sst_source` (GLORYS/ANFC) | `mooring_*.csv` | Penanda asal data — dasar analisis distribution shift |
+| `sst_era5` | `mooring_*.csv` | SST versi ERA5/OSTIA — HANYA pembanding independen QC, sengaja TIDAK jadi fitur X (mencegah kebocoran informasi dari produk lain) |
+
+#### 2.4.4 Struktur Tensor
 
 ```
-[sst, u10, v10, t2m, d2m, sp, wind_speed, doy_sin, doy_cos]
+X : (N, T, F) = (jumlah_window, lookback 7/14/21/30, 9 fitur)
+y : (N, H)    = (jumlah_window, horizon 1/3/7/14)
 ```
-`sst` = histori target itu sendiri (GLORYS/ANFC, bukan ERA5).
-`wind_speed` = turunan √(u10² + v10²).
+Tidak ada dimensi spasial (grid lat/lon) — pendekatan virtual mooring
+mereduksi masalah spatio-temporal jadi deret waktu titik, sehingga
+input cukup 2D per sampel, bukan 4D seperti model berbasis grid
+(ConvLSTM/ViT).
 
 ### 2.5 Skema Split (Kronologis, Bukan Acak)
 
@@ -145,18 +184,18 @@ thesis-sst/
 │   │   ├── dataset_laut_banda/
 │   │   │   ├── era5_banda_2014..2025.nc      # raw (ternyata ZIP berekstensi .nc)
 │   │   │   └── era5_banda_fixed/             # hasil ekstraksi fix_era5_zip.py
-│   │   ├── dataset-sentinel/        # **(tidak dipergunakan)**
-│   │   ├── satelit/                 # **(tidak dipergunakan)**
-│   │   ├── argo_float/, dataset-float/       #  **(tidak dipergunakan)**
-│   │   └── _extracted/, _sentinel_inspect_tmp/  #  **(tidak dipergunakan)**
+│   │   ├── dataset-sentinel/        # **tidak dipergunakan** ZIP bulanan Sentinel-3 (sebagian rusak)
+│   │   ├── satelit/                 # **tidak dipergunakan**Sentinel-3 terekstrak manual (parsial)
+│   │   ├── argo_float/, dataset-float/       # **tidak dipergunakan**data Argo (belum diproses)
+│   │   └── _extracted/, _sentinel_inspect_tmp/  # **tidak dipergunakan**folder kerja sementara
 │   │
 │   └── processed/
 │       ├── virtual_mooring/
 │       │   ├── mooring_01.csv .. mooring_06.csv
 │       │   ├── mooring_grid_info.csv
-│       │   ├── sentinel_mooring_01.csv .. 06.csv  #  **(tidak dipergunakan)** dibangun, tdk dipakai di thesis final
-│       │   ├── sentinel_validation/               #  **(tidak dipergunakan)** hasil analyze_sentinel_validation.py
-│       │   └── qc/                                #  **(tidak dipergunakan)** qc_summary_all.csv, qc_*.png
+│       │   ├── sentinel_mooring_01.csv .. 06.csv  # **tidak dipergunakan** dibangun, tdk dipakai di thesis final
+│       │   ├── sentinel_validation/               # **tidak dipergunakan** hasil analyze_sentinel_validation.py
+│       │   └── qc/                                # qc_summary_all.csv, qc_*.png
 │       └── windowed/
 │           ├── scaler_params.csv
 │           ├── lb07_h01/ .. lb30_h14/    # 16 kombinasi grid utama

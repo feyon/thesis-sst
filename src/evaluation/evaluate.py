@@ -3,10 +3,6 @@ Evaluasi satu checkpoint model terlatih terhadap baseline Persistence,
 menghitung seluruh metrik di config.evaluation.metrics
 (rmse, mae, r2, nse, skill_score), dipecah per horizon-step dan per mooring.
 
-Baseline Persistence: prediksi = SST hari terakhir di window input,
-diulang utk semua langkah horizon (naive forecast standar di literatur
-SST prediction, jadi acuan Skill Score).
-
 Cara jalan (lokal / CPU):
     python -m src.evaluation.evaluate --config configs/config.yaml \\
         --lookback 30 --horizon 7 --model hybrid --split test

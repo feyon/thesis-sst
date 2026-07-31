@@ -29,7 +29,7 @@
 ```
 thesis-sst/
 ├── configs/
-│   └── [config.yaml](thesis-sst/blob/main/configs/config.yaml)                  # single source of truth seluruh pipeline
+│   └── config.yaml               # single source of truth seluruh pipeline
 │
 ├── data/
 │   ├── raw/

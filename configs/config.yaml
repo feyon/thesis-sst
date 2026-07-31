@@ -1,35 +1,38 @@
 # ==========================================================================
 # Konfigurasi Penelitian: Prediksi SST Laut Banda
 # Model Hibrida LSTM-Transformer
-# Pendekatan: UNIVARIAT (hanya thetao/SST sebagai input, F = 1)
+# Pendekatan: MULTIVARIAT (SST + prediktor ERA5, F = 9)
+#   Riwayat: awalnya dirancang univariate (F=1, hanya thetao), diubah ke
+#   multivariate setelah data virtual mooring + ERA5 (u10,v10,t2m,d2m,sp,
+#   wind_speed) tersedia lengkap & tervalidasi (QC lolos, 2014-2025).
 # Single source of truth untuk seluruh pipeline.
 # ==========================================================================
 
 project:
-  name: thesis-sst
-  approach: univariate
+  name: sst
+  approach: multivariate   # univariate | multivariate
   random_seed: 42
 
 # --------------------------------------------------------------------------
 # Domain Spasial (Laut Banda)
 # --------------------------------------------------------------------------
 domain:
-  lat_min: -9.0          # domain analisis
+  lat_min: -9.0
   lat_max: -3.0
   lon_min: 123.0
   lon_max: 133.0
-  buffer_lat_min: -9.5   # buffer download (lebih luas dari domain analisis)
+  buffer_lat_min: -9.5
   buffer_lat_max: -2.5
   buffer_lon_min: 122.5
   buffer_lon_max: 133.5
-  depth_min: 0.49        # lapisan permukaan (~0.5 m)
+  depth_min: 0.49
   depth_max: 0.51
 
 # --------------------------------------------------------------------------
-# Sumber Data CMEMS
+# Sumber & Lokasi Data (SATU blok data: -- jangan diduplikasi)
 # --------------------------------------------------------------------------
 data:
-  variables: [thetao]                                       # UNIVARIAT: hanya SST
+  variables: [thetao]                                       # variabel yg didownload dari CMEMS (SST saja; prediktor multivariate berasal dari ERA5, bukan dari sini)
   reanalysis_dataset_id: cmems_mod_glo_phy_my_0.083deg_P1D-m
   analysis_dataset_id:   cmems_mod_glo_phy_anfc_0.083deg_P1D-m
   raw_dir: data/raw
@@ -38,13 +41,23 @@ data:
   end_date: "2025-12-31"
   reanalysis_end: "2023-12-31"     # batas reanalysis; setelahnya pakai ANFC
 
+  # --- Ditambahkan untuk tahap virtual mooring & windowing ---
+  mooring_dir: data/processed/virtual_mooring   # output extract_virtual_mooring.py
+  windowed_dir: data/processed/windowed         # output build_windows.py
+  mooring_codes: ["01", "02", "03", "04", "05", "06"]
+  target_col: sst
+  # Kolom prediktor ERA5, dipakai karena project.approach: multivariate
+  predictor_vars: [u10, v10, t2m, d2m, sp, wind_speed]
+  # Tambahkan fitur temporal (doy_sin/doy_cos) saat multivariate -> F=9
+  add_temporal_features_if_multivariate: true
+
 # --------------------------------------------------------------------------
 # Pembagian Data Temporal (kronologis, TANPA pengacakan)
 # --------------------------------------------------------------------------
 split:
-  train: ["2014-01-01", "2022-12-31"]   # ~9 tahun
-  val:   ["2023-01-01", "2023-12-31"]   # 1 tahun
-  test:  ["2024-01-01", "2025-12-31"]   # ANFC 2024-2025
+  train: ["2014-01-01", "2022-12-31"]   # ~9 tahun, GLORYS
+  val:   ["2023-01-01", "2023-12-31"]   # 1 tahun, GLORYS (homogen dgn train)
+  test:  ["2024-01-01", "2025-12-31"]   # ANFC murni -> uji generalisasi OOD
 
 # --------------------------------------------------------------------------
 # Quality Control SST
@@ -53,6 +66,7 @@ qc:
   sst_min: 20.0          # °C - batas fisik wajar Laut Banda
   sst_max: 35.0
   interpolate_gaps: true # interpolasi temporal untuk celah kecil
+  max_gap_days: 3         # celah > ini TIDAK diinterpolasi, dibiarkan NaN lalu di-drop
 
 # --------------------------------------------------------------------------
 # Desain Eksperimen
@@ -95,13 +109,14 @@ model:
 # Pelatihan
 # --------------------------------------------------------------------------
 training:
-  device: mps            # Apple Silicon: mps | cpu | cuda
+  device: cuda            # HPC (NVIDIA GPU via SLURM): cuda | cpu
   batch_size: 64
+  batch_size_grid: 256
   max_epochs: 100
   learning_rate: 0.001
   early_stopping_patience: 10
   num_workers: 4
-  pin_memory: false      # WAJIB false untuk backend MPS
+  pin_memory: true        # aktifkan utk cuda (mempercepat transfer host->GPU)
 
 # --------------------------------------------------------------------------
 # Evaluasi

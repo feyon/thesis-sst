@@ -24,153 +24,7 @@
 | Periode data | 2014–2025 |
 
 ---
-
-## 2. Spesifikasi Desain Eksperimen
-
-### 2.1 Domain Spasial
-
-```yaml
-domain:
-  lat_min: -9.0   lat_max: -3.0
-  lon_min: 123.0  lon_max: 133.0
-  buffer:  -9.5 s/d -2.5 (lat), 122.5 s/d 133.5 (lon)
-  depth: permukaan (~0.5 m)
-```
-
-### 2.2 Enam Titik Virtual Mooring
-
-| Titik | Lon | Lat | Representasi |
-|---|---|---|---|
-| Lok-1 | 123.82 | -7.27 | Barat daya — jalur inflow Selat Ombai/Laut Flores |
-| Lok-2 | 125.27 | -4.97 | Barat laut — jalur inflow Laut Banda utara–Buru |
-| Lok-3 | 128.49 | -7.76 | Selatan-tengah — deep basin, zona upwelling |
-| Lok-4 | 128.75 | -5.14 | Tengah — pusat basin (open ocean) |
-| Lok-5 | 130.84 | -4.65 | Timur laut — pengaruh perairan Seram |
-| Lok-6 | 130.93 | -6.13 | Timur — zona upwelling monsun tenggara |
-
-### 2.3 Sumber Data & Peran
-
-| Sumber | Dataset ID | Variabel | Peran | Periode dipakai |
-|---|---|---|---|---|
-| CMEMS GLORYS | `cmems_mod_glo_phy_my_0.083deg_P1D-m` | `thetao` | Target (y) — train & val | 2014–2023 |
-| CMEMS ANFC | `cmems_mod_glo_phy_anfc_0.083deg_P1D-m` | `thetao` | Target (y) — test | 2024–2025 (file 2026 dikecualikan) |
-| ERA5 | single-levels reanalysis | `u10,v10,t2m,d2m,sp` | Prediktor (X) | 2014–2025, seluruh split |
-
-Catatan: variabel radiasi ERA5 (`ssr`,`str`) dikeluarkan dari desain
-(kendala akses data daily-aggregated); digantikan fitur temporal
-`doy_sin`/`doy_cos`. Variabel `sst` versi ERA5 hanya dipakai sebagai
-pembanding QC independen, tidak masuk sebagai fitur model.
-
-### 2.4 Variabel yang Digunakan
-
-#### 2.4.1 Variabel Input — X (fitur prediktor, F = 9)
-
-Setiap sampel input berbentuk tensor **(T, F)** = (panjang lookback, 9
-fitur), dinormalisasi z-score (fit dari periode train saja).
-
-| # | Variabel | Sumber | Satuan | Kegunaan |
-|---|---|---|---|---|
-| 1 | `sst` | GLORYS/ANFC (`thetao`, lapisan permukaan ~0.5 m) | °C | Histori target itu sendiri (autoregresif) — sinyal terkuat krn SST sangat autokorelatif |
-| 2 | `u10` | ERA5 | m/s | Komponen zonal angin 10 m — arah/kekuatan monsun, pemicu upwelling |
-| 3 | `v10` | ERA5 | m/s | Komponen meridional angin 10 m |
-| 4 | `t2m` | ERA5 | °C (dari K) | Suhu udara 2 m — proxy fluks panas sensibel |
-| 5 | `d2m` | ERA5 | °C (dari K) | Titik embun 2 m — proxy kelembapan & fluks panas laten (evaporative cooling) |
-| 6 | `sp` | ERA5 | Pa | Tekanan permukaan — penanda sistem sinoptik/monsun |
-| 7 | `wind_speed` | Turunan: √(u10² + v10²) | m/s | Magnitudo angin — pengaduk mixed layer, pengendali evaporasi |
-| 8 | `doy_sin` | Turunan: sin(2π·doy/365.25) | — | Encoding musiman siklik (pengganti implisit sinyal radiasi yg di-drop) |
-| 9 | `doy_cos` | Turunan: cos(2π·doy/365.25) | — | Pasangan doy_sin — posisi kalender kontinu tanpa lompatan 31 Des→1 Jan |
-
-#### 2.4.2 Variabel Target — y
-
-- **y = `sst`** (GLORYS/ANFC) pada **h hari ke depan** setelah akhir
-  window input. Bentuk **(H,)** per sampel — prediksi *direct
-  multi-step* (semua langkah horizon sekaligus, bukan rekursif).
-- **Tidak dinormalisasi** — tetap skala °C asli, sehingga RMSE/MAE
-  langsung terbaca dalam satuan suhu.
-
-#### 2.4.3 Variabel Metadata (bukan input model, untuk analisis)
-
-| Variabel | Lokasi | Kegunaan |
-|---|---|---|
-| `mooring_id` (0–5) | `meta_*.csv` | Identitas titik — pemecahan evaluasi per lokasi; belum dipakai sbg fitur/embedding model |
-| `target_start_date` | `meta_*.csv` | Tanggal awal periode target tiap window — analisis temporal & plotting |
-| `sst_source` (GLORYS/ANFC) | `mooring_*.csv` | Penanda asal data — dasar analisis distribution shift |
-| `sst_era5` | `mooring_*.csv` | SST versi ERA5/OSTIA — HANYA pembanding independen QC, sengaja TIDAK jadi fitur X (mencegah kebocoran informasi dari produk lain) |
-
-#### 2.4.4 Struktur Tensor
-
-```
-X : (N, T, F) = (jumlah_window, lookback 7/14/21/30, 9 fitur)
-y : (N, H)    = (jumlah_window, horizon 1/3/7/14)
-```
-Tidak ada dimensi spasial (grid lat/lon) — pendekatan virtual mooring
-mereduksi masalah spatio-temporal jadi deret waktu titik, sehingga
-input cukup 2D per sampel, bukan 4D seperti model berbasis grid
-(ConvLSTM/ViT).
-
-### 2.5 Skema Split (Kronologis, Bukan Acak)
-
-| Split | Periode | Sumber |
-|---|---|---|
-| Train | 2014-01-01 s/d 2022-12-31 | GLORYS |
-| Val | 2023-01-01 s/d 2023-12-31 | GLORYS |
-| Test | 2024-01-01 s/d 2025-12-31 | ANFC (out-of-distribution) |
-
-Normalisasi (z-score) di-fit **hanya dari periode train**, diterapkan
-ke val/test tanpa penghitungan ulang (pencegahan data leakage). Target
-tidak dinormalisasi (skala °C asli).
-
-### 2.6 Grid Eksperimen Utama
-
-```
-lookback_windows: [7, 14, 21, 30] hari
-horizons:         [1, 3, 7, 14] hari
-models:           [lstm, transformer, hybrid]
-```
-= **4 × 4 × 3 = 48 eksperimen**
-
-**Eksperimen tambahan (ad-hoc, di luar grid utama):** lookback=1 hari
-untuk ketiga model × 4 horizon (12 kombinasi), dijalankan via CLI
-override (`--lookbacks 1`) tanpa mengubah `config.yaml`, khusus untuk
-replikasi format tabel penelitian acuan (lookback 1/7/14/21).
-
-### 2.7 Arsitektur Model
-
-| Model | Struktur | Parameter (approx.) |
-|---|---|---|
-| LSTM | LSTM(hidden=50, layer=1) → Linear | ~12 ribu |
-| Transformer | Linear proj(d=64) → PosEnc → TransformerEncoder(2 layer, 4 head) → Linear | ~68 ribu |
-| Hybrid | LSTM(hidden=50) → proj Linear(→52) → PosEnc → TransformerEncoder(2 layer, 4 head) → Linear | ~65 ribu |
-
-### 2.8 Konfigurasi Training
-
-```yaml
-device: cuda
-batch_size: 64
-max_epochs: 100
-learning_rate: 0.001
-early_stopping_patience: 10
-random_seed: 42
-```
-
-### 2.9 Metrik Evaluasi
-
-**Dipakai dalam narasi thesis (Bab IV):** MAE, RMSE, R².
-
-**Dihitung otomatis oleh `evaluate.py`/`run_all.py` tapi TIDAK dipakai
-dalam narasi thesis:** NSE, Skill Score (terhadap baseline Persistence).
-Keputusan ini diambil setelah evaluasi awal — narasi akhir bab hasil
-berbasis RMSE/MAE/R² murni, bukan Skill Score.
-
-### 2.10 Infrastruktur Eksekusi
-
-- **HPC:** SLURM, partition `gpu_riset`, NVIDIA H100 80GB (`--gres=gpu:1`)
-- **Container:** Apptainer (`thesis-sst.sif`), flag `--nv` wajib untuk akses GPU
-- **Working directory:** `/workspace` di dalam container (bind mount dari `~/thesis-sst`)
-
----
-
-## 3. Struktur Direktori Project
+## 2. Struktur Direktori Project
 
 ```
 thesis-sst/
@@ -216,6 +70,150 @@ thesis-sst/
     ├── figures/             # fig_*.png per run + metric_lines_lb{N}_<split>/
     └── samples/             # test_sample_lb{N}_h{H}[_model].csv
 ```
+---
+
+## 3. Spesifikasi Desain Eksperimen
+
+### 3.1 Domain Spasial
+
+```yaml
+domain:
+  lat_min: -9.0   lat_max: -3.0
+  lon_min: 123.0  lon_max: 133.0
+  buffer:  -9.5 s/d -2.5 (lat), 122.5 s/d 133.5 (lon)
+  depth: permukaan (~0.5 m)
+```
+
+### 3.2 Enam Titik Virtual Mooring
+
+| Titik | Lon | Lat | Representasi |
+|---|---|---|---|
+| Lok-1 | 123.82 | -7.27 | Barat daya — jalur inflow Selat Ombai/Laut Flores |
+| Lok-2 | 125.27 | -4.97 | Barat laut — jalur inflow Laut Banda utara–Buru |
+| Lok-3 | 128.49 | -7.76 | Selatan-tengah — deep basin, zona upwelling |
+| Lok-4 | 128.75 | -5.14 | Tengah — pusat basin (open ocean) |
+| Lok-5 | 130.84 | -4.65 | Timur laut — pengaruh perairan Seram |
+| Lok-6 | 130.93 | -6.13 | Timur — zona upwelling monsun tenggara |
+
+### 3.3 Sumber Data & Peran
+
+| Sumber | Dataset ID | Variabel | Peran | Periode dipakai |
+|---|---|---|---|---|
+| CMEMS GLORYS | `cmems_mod_glo_phy_my_0.083deg_P1D-m` | `thetao` | Target (y) — train & val | 2014–2023 |
+| CMEMS ANFC | `cmems_mod_glo_phy_anfc_0.083deg_P1D-m` | `thetao` | Target (y) — test | 2024–2025 (file 2026 dikecualikan) |
+| ERA5 | single-levels reanalysis | `u10,v10,t2m,d2m,sp` | Prediktor (X) | 2014–2025, seluruh split |
+
+Catatan: variabel radiasi ERA5 (`ssr`,`str`) dikeluarkan dari desain
+(kendala akses data daily-aggregated); digantikan fitur temporal
+`doy_sin`/`doy_cos`. Variabel `sst` versi ERA5 hanya dipakai sebagai
+pembanding QC independen, tidak masuk sebagai fitur model.
+
+### 3.4 Variabel yang Digunakan
+
+#### 3.4.1 Variabel Input — X (fitur prediktor, F = 9)
+
+Setiap sampel input berbentuk tensor **(T, F)** = (panjang lookback, 9
+fitur), dinormalisasi z-score (fit dari periode train saja).
+
+| # | Variabel | Sumber | Satuan | Kegunaan |
+|---|---|---|---|---|
+| 1 | `sst` | GLORYS/ANFC (`thetao`, lapisan permukaan ~0.5 m) | °C | Histori target itu sendiri (autoregresif) — sinyal terkuat krn SST sangat autokorelatif |
+| 2 | `u10` | ERA5 | m/s | Komponen zonal angin 10 m — arah/kekuatan monsun, pemicu upwelling |
+| 3 | `v10` | ERA5 | m/s | Komponen meridional angin 10 m |
+| 4 | `t2m` | ERA5 | °C (dari K) | Suhu udara 2 m — proxy fluks panas sensibel |
+| 5 | `d2m` | ERA5 | °C (dari K) | Titik embun 2 m — proxy kelembapan & fluks panas laten (evaporative cooling) |
+| 6 | `sp` | ERA5 | Pa | Tekanan permukaan — penanda sistem sinoptik/monsun |
+| 7 | `wind_speed` | Turunan: √(u10² + v10²) | m/s | Magnitudo angin — pengaduk mixed layer, pengendali evaporasi |
+| 8 | `doy_sin` | Turunan: sin(2π·doy/365.25) | — | Encoding musiman siklik (pengganti implisit sinyal radiasi yg di-drop) |
+| 9 | `doy_cos` | Turunan: cos(2π·doy/365.25) | — | Pasangan doy_sin — posisi kalender kontinu tanpa lompatan 31 Des→1 Jan |
+
+#### 3.4.2 Variabel Target — y
+
+- **y = `sst`** (GLORYS/ANFC) pada **h hari ke depan** setelah akhir
+  window input. Bentuk **(H,)** per sampel — prediksi *direct
+  multi-step* (semua langkah horizon sekaligus, bukan rekursif).
+- **Tidak dinormalisasi** — tetap skala °C asli, sehingga RMSE/MAE
+  langsung terbaca dalam satuan suhu.
+
+#### 3.4.3 Variabel Metadata (bukan input model, untuk analisis)
+
+| Variabel | Lokasi | Kegunaan |
+|---|---|---|
+| `mooring_id` (0–5) | `meta_*.csv` | Identitas titik — pemecahan evaluasi per lokasi; belum dipakai sbg fitur/embedding model |
+| `target_start_date` | `meta_*.csv` | Tanggal awal periode target tiap window — analisis temporal & plotting |
+| `sst_source` (GLORYS/ANFC) | `mooring_*.csv` | Penanda asal data — dasar analisis distribution shift |
+| `sst_era5` | `mooring_*.csv` | SST versi ERA5/OSTIA — HANYA pembanding independen QC, sengaja TIDAK jadi fitur X (mencegah kebocoran informasi dari produk lain) |
+
+#### 3.4.4 Struktur Tensor
+
+```
+X : (N, T, F) = (jumlah_window, lookback 7/14/21/30, 9 fitur)
+y : (N, H)    = (jumlah_window, horizon 1/3/7/14)
+```
+Tidak ada dimensi spasial (grid lat/lon) — pendekatan virtual mooring
+mereduksi masalah spatio-temporal jadi deret waktu titik, sehingga
+input cukup 2D per sampel, bukan 4D seperti model berbasis grid
+(ConvLSTM/ViT).
+
+### 3.5 Skema Split (Kronologis, Bukan Acak)
+
+| Split | Periode | Sumber |
+|---|---|---|
+| Train | 2014-01-01 s/d 2022-12-31 | GLORYS |
+| Val | 2023-01-01 s/d 2023-12-31 | GLORYS |
+| Test | 2024-01-01 s/d 2025-12-31 | ANFC (out-of-distribution) |
+
+Normalisasi (z-score) di-fit **hanya dari periode train**, diterapkan
+ke val/test tanpa penghitungan ulang (pencegahan data leakage). Target
+tidak dinormalisasi (skala °C asli).
+
+### 3.6 Grid Eksperimen Utama
+
+```
+lookback_windows: [7, 14, 21, 30] hari
+horizons:         [1, 3, 7, 14] hari
+models:           [lstm, transformer, hybrid]
+```
+= **4 × 4 × 3 = 48 eksperimen**
+
+**Eksperimen tambahan (ad-hoc, di luar grid utama):** lookback=1 hari
+untuk ketiga model × 4 horizon (12 kombinasi), dijalankan via CLI
+override (`--lookbacks 1`) tanpa mengubah `config.yaml`, khusus untuk
+replikasi format tabel penelitian acuan (lookback 1/7/14/21).
+
+### 3.7 Arsitektur Model
+
+| Model | Struktur | Parameter (approx.) |
+|---|---|---|
+| LSTM | LSTM(hidden=50, layer=1) → Linear | ~12 ribu |
+| Transformer | Linear proj(d=64) → PosEnc → TransformerEncoder(2 layer, 4 head) → Linear | ~68 ribu |
+| Hybrid | LSTM(hidden=50) → proj Linear(→52) → PosEnc → TransformerEncoder(2 layer, 4 head) → Linear | ~65 ribu |
+
+### 3.8 Konfigurasi Training
+
+```yaml
+device: cuda
+batch_size: 64
+max_epochs: 100
+learning_rate: 0.001
+early_stopping_patience: 10
+random_seed: 42
+```
+
+### 3.9 Metrik Evaluasi
+
+**Dipakai dalam narasi thesis (Bab IV):** MAE, RMSE, R².
+
+**Dihitung otomatis oleh `evaluate.py`/`run_all.py` tapi TIDAK dipakai
+dalam narasi thesis:** NSE, Skill Score (terhadap baseline Persistence).
+Keputusan ini diambil setelah evaluasi awal — narasi akhir bab hasil
+berbasis RMSE/MAE/R² murni, bukan Skill Score.
+
+### 3.10 Infrastruktur Eksekusi
+
+- **HPC:** SLURM, partition `gpu_riset`, NVIDIA H100 80GB (`--gres=gpu:1`)
+- **Container:** Apptainer (`thesis-sst.sif`), flag `--nv` wajib untuk akses GPU
+- **Working directory:** `/workspace` di dalam container (bind mount dari `~/thesis-sst`)
 
 ---
 

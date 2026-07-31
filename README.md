@@ -184,17 +184,11 @@ thesis-sst/
 │   │   ├── dataset_laut_banda/
 │   │   │   ├── era5_banda_2014..2025.nc      # raw (ternyata ZIP berekstensi .nc)
 │   │   │   └── era5_banda_fixed/             # hasil ekstraksi fix_era5_zip.py
-│   │   ├── dataset-sentinel/        # **tidak dipergunakan** ZIP bulanan Sentinel-3 (sebagian rusak)
-│   │   ├── satelit/                 # **tidak dipergunakan**Sentinel-3 terekstrak manual (parsial)
-│   │   ├── argo_float/, dataset-float/       # **tidak dipergunakan**data Argo (belum diproses)
-│   │   └── _extracted/, _sentinel_inspect_tmp/  # **tidak dipergunakan**folder kerja sementara
 │   │
 │   └── processed/
 │       ├── virtual_mooring/
 │       │   ├── mooring_01.csv .. mooring_06.csv
 │       │   ├── mooring_grid_info.csv
-│       │   ├── sentinel_mooring_01.csv .. 06.csv  # **tidak dipergunakan** dibangun, tdk dipakai di thesis final
-│       │   ├── sentinel_validation/               # **tidak dipergunakan** hasil analyze_sentinel_validation.py
 │       │   └── qc/                                # qc_summary_all.csv, qc_*.png
 │       └── windowed/
 │           ├── scaler_params.csv

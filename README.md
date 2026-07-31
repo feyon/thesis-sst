@@ -175,7 +175,7 @@ berbasis RMSE/MAE/R² murni, bukan Skill Score.
 ```
 thesis-sst/
 ├── configs/
-│   └── <a href="https://github.com/feyon/thesis-sst/blob/main/configs/config.yaml">config.yaml</a>                  # single source of truth seluruh pipeline
+│   └── [config.yaml]<https://github.com/feyon/thesis-sst/blob/main/configs/config.yaml>                  # single source of truth seluruh pipeline
 │
 ├── data/
 │   ├── raw/

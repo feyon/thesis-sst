@@ -7,31 +7,10 @@ Membaca:
   - training.*      -> device, batch_size, max_epochs, lr, early stopping
   - model.<nama>.*  -> hyperparameter arsitektur
 
-Cara jalan (lokal, CPU):
-    python -m src.training.train --config configs/config.yaml \\
-        --lookback 30 --horizon 7 --model lstm
-
-Cara jalan (SLURM + apptainer, GPU):
-    cd ~/thesis-sst
-    srun --partition=gpu_riset --gres=gpu:1 --cpus-per-task=4 --mem=16G \\
-      --time=02:00:00 \\
-      apptainer exec --nv --pwd /workspace \\
-      --bind ~/thesis-sst/data:/workspace/data \\
-      --bind ~/thesis-sst/configs:/workspace/configs \\
-      --bind ~/thesis-sst/src:/workspace/src \\
-      --bind ~/thesis-sst/results:/workspace/results \\
-      ~/thesis-sst/thesis-sst.sif \\
-      python -m src.training.train --config configs/config.yaml \\
-        --lookback 30 --horizon 7 --model hybrid
-
-Catatan desain (baca sebelum dipakai utk hasil final thesis):
+Catatan desain:
   - Model HYBRID di sini adalah LSTM -> proyeksi linear -> TransformerEncoder
     -> Linear output, sesuai persis parameter di config.model.hybrid
     (lstm_hidden, proj_dim, nhead, num_transformer_layers, dim_feedforward).
-    Kalau kamu masih memakai desain HybridLSTMTransformer yang lebih detail
-    (BiLSTM Local Temporal Encoder + SpatioTemporal Transformer Encoder +
-    Adaptive Fusion Gate) dari diskusi sebelumnya, beri tahu -> arsitektur
-    di file ini perlu disesuaikan/diganti dengan implementasi tsb.
   - Semua 6 mooring dilatih SEBAGAI SATU MODEL GABUNGAN (shared weights),
     TANPA location embedding (mooring_id belum dipakai sbg fitur model).
     Ini bisa ditambahkan belakangan kalau hasil awal menunjukkan perlu
